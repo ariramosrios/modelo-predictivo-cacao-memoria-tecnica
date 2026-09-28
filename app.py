@@ -6,11 +6,16 @@ import numpy as np
 import xgboost as xgb
 import pandas as pd
 import os
+import io
+import math
+import time
+from PIL import Image
 
 # =====================================================================
 # CONFIGURACIÓN INICIAL Y CSS
 # =====================================================================
 URL_IMAGEN_PORTADA = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSICd_ilkuVkB8fVj3IH7epvjHwJOIjD3lc1VAYDtzOy9Ac0FGQx0rqmto&s=10"
+SEGUNDOS_ALERTA = 5  # Tiempo minimo que la alerta de agua permanece abierta antes de poder cerrarse
 
 st.set_page_config(page_title="AgroCacaoIA | Evaluacion de Terrenos", layout="wide")
 
@@ -35,8 +40,33 @@ st.markdown(f"""
 
     div[data-testid="stNumberInput"] div[data-baseweb="input"] > div,
     div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-    div[data-testid="stTextInput"] div[data-baseweb="input"] > div {{
+    div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+    div[data-testid="stTextInputRootElement"],
+    div[data-testid="stNumberInputContainer"],
+    div[data-testid="stSelectbox"] div:has(> input) {{
         background-color: #FFFFFF !important; border: 1px solid #D7CCC8 !important; border-radius: 8px !important; box-shadow: 0 2px 5px rgba(0,0,0,0.02) !important;
+    }}
+    /* Texto oscuro dentro de los campos (si no, hereda el blanco del tema oscuro del navegador) */
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stNumberInput"] input,
+    div[data-testid="stSelectbox"] input,
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] div {{
+        color: #4E342E !important; -webkit-text-fill-color: #4E342E !important; caret-color: #4E342E !important;
+    }}
+    div[data-testid="stTextInput"] input::placeholder {{ color: #A1887F !important; -webkit-text-fill-color: #A1887F !important; }}
+    div[data-testid="stTextInput"] input:disabled {{ color: #6D4C41 !important; -webkit-text-fill-color: #6D4C41 !important; }}
+    div[data-testid="stNumberInput"] button, div[data-testid="stSelectbox"] svg {{ color: #5D4037 !important; fill: #5D4037 !important; }}
+    /* Lista desplegable del selector */
+    div[data-testid="stSelectboxVirtualDropdown"], div[data-baseweb="popover"] ul {{
+        background-color: #FFFFFF !important; border: 1px solid #D7CCC8 !important;
+    }}
+    div[data-testid="stSelectboxVirtualDropdown"] [role="option"], div[data-baseweb="popover"] li {{
+        color: #4E342E !important; background-color: #FFFFFF !important;
+    }}
+    div[data-testid="stSelectboxVirtualDropdown"] [role="option"]:hover,
+    div[data-testid="stSelectboxVirtualDropdown"] [role="option"][aria-selected="true"],
+    div[data-baseweb="popover"] li:hover, div[data-baseweb="popover"] li[aria-selected="true"] {{
+        background-color: #F1F8E9 !important;
     }}
 
     div[data-testid="stVerticalBlock"]:has(> div.element-container .step-box) {{
@@ -52,6 +82,54 @@ st.markdown(f"""
     .stButton>button p {{ color: #FFFFFF !important; font-size: 22px !important; font-weight: 900 !important; }}
     
     .descripcion-modelo {{ text-align: center; font-size: 1.25rem; color: #4E342E; line-height: 1.6; margin-bottom: 60px; padding: 0 20px; }}
+</style>
+""", unsafe_allow_html=True)
+
+# --- Estilos del modal de alerta de agua ---
+# El boton de cierre queda bloqueado (y con cuenta regresiva) durante SEGUNDOS_ALERTA
+# para que el usuario lea el aviso. Las animaciones reinician cada vez que el modal se abre.
+st.markdown(f"""
+<style>
+    @property --seg-restantes {{ syntax: '<integer>'; initial-value: 0; inherits: false; }}
+    @keyframes cuenta-regresiva {{ from {{ --seg-restantes: {SEGUNDOS_ALERTA}; }} to {{ --seg-restantes: 0; }} }}
+    @keyframes barra-espera {{ from {{ transform: scaleX(1); }} to {{ transform: scaleX(0); }} }}
+    @keyframes habilitar-cierre {{ to {{ opacity: 1; pointer-events: auto; cursor: pointer; }} }}
+    @keyframes ocultar {{ to {{ opacity: 0; height: 0; margin: 0; }} }}
+
+    /* Fondo claro fijo: sin esto el modal hereda el tema oscuro del navegador y el texto pierde contraste */
+    div[data-testid="stDialog"] > div:has(> section[role="dialog"]) {{
+        background-color: #FFFFFF !important; border-top: 6px solid #1E88E5 !important;
+    }}
+    .alerta-agua {{ text-align: center; }}
+    .alerta-agua .icono {{
+        width: 72px; height: 72px; margin: 0 auto 14px; border-radius: 50%; background: #E3F2FD;
+        display: flex; align-items: center; justify-content: center;
+    }}
+    .alerta-agua .titulo {{ color: #0D47A1; font-size: 1.35rem; font-weight: 900; margin-bottom: 8px; }}
+    .alerta-agua .texto {{ color: #37474F; font-size: 1.02rem; line-height: 1.5; margin-bottom: 14px; }}
+    .alerta-agua .coords {{
+        display: inline-block; background: #ECEFF1; color: #263238; border-radius: 6px;
+        padding: 4px 10px; font-family: monospace; font-size: 0.95rem; margin-bottom: 14px;
+    }}
+    .alerta-agua ul {{ text-align: left; color: #455A64; font-size: 0.95rem; margin: 0 0 16px 0; padding-left: 22px; }}
+    .alerta-agua .espera {{ overflow: hidden; animation: ocultar 0.3s ease {SEGUNDOS_ALERTA}s forwards; }}
+    .alerta-agua .espera-texto {{ color: #78909C; font-size: 0.85rem; margin-bottom: 6px; }}
+    .alerta-agua .espera-texto::after {{
+        counter-reset: seg var(--seg-restantes); content: counter(seg) " s";
+        animation: cuenta-regresiva {SEGUNDOS_ALERTA}s steps({SEGUNDOS_ALERTA}, end) forwards;
+    }}
+    .alerta-agua .barra {{ height: 6px; background: #CFD8DC; border-radius: 3px; overflow: hidden; }}
+    .alerta-agua .barra > div {{
+        height: 100%; background: #1E88E5; transform-origin: left;
+        animation: barra-espera {SEGUNDOS_ALERTA}s linear forwards;
+    }}
+
+    .st-key-btn_cerrar_alerta_agua button {{
+        height: 52px !important; margin-top: 4px !important;
+        opacity: 0.45; pointer-events: none; cursor: not-allowed;
+        animation: habilitar-cierre 0s linear {SEGUNDOS_ALERTA}s forwards;
+    }}
+    .st-key-btn_cerrar_alerta_agua button p {{ font-size: 17px !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -84,34 +162,107 @@ def obtener_datos_satelitales(lat, lon):
     except:
         return 500.0, 1600.0 
 
+HEADERS_OSM = {'User-Agent': 'AgroCacaoIA/1.0 (evaluacion de terrenos de cacao)'}
+COLOR_AGUA_OSM = (170, 211, 223)   # #aad3df: mar, rios y lagos en el mapa base de OpenStreetMap
+COLOR_PLAYA_OSM = (255, 241, 186)  # #fff1ba: playas
+
+def _es_agua_segun_mapa(lat, lon, zoom=17, radio=3):
+    """Lee el color del mosaico de OpenStreetMap (el mismo mapa que ve el usuario) en el punto clicado.
+    Es preciso a pocos metros de la orilla, a diferencia de la geocodificacion inversa,
+    que en el mar cercano a la costa devuelve la calle o edificio mas proximo."""
+    n = 2 ** zoom
+    x = (lon + 180.0) / 360.0 * n
+    y = (1.0 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2.0 * n
+    tile_x, tile_y = int(x), int(y)
+    px, py = int((x - tile_x) * 256), int((y - tile_y) * 256)
+
+    respuesta = requests.get(f"https://tile.openstreetmap.org/{zoom}/{tile_x}/{tile_y}.png", headers=HEADERS_OSM, timeout=8)
+    respuesta.raise_for_status()
+    imagen = Image.open(io.BytesIO(respuesta.content)).convert("RGB")
+
+    # Tolerancia minima: las calles secundarias (#f7fabf) tienen un tono muy parecido al de las playas
+    def es_color_agua(color):
+        return any(all(abs(c - r) <= 3 for c, r in zip(color, ref)) for ref in (COLOR_AGUA_OSM, COLOR_PLAYA_OSM))
+
+    # Se revisa una pequena ventana alrededor del punto para tolerar etiquetas o lineas dibujadas encima del agua
+    muestras = [
+        imagen.getpixel((min(255, max(0, px + dx)), min(255, max(0, py + dy))))
+        for dx in range(-radio, radio + 1) for dy in range(-radio, radio + 1)
+    ]
+    proporcion_agua = sum(es_color_agua(c) for c in muestras) / len(muestras)
+    return es_color_agua(imagen.getpixel((px, py))) or proporcion_agua >= 0.5
+
+def _es_agua_segun_nominatim(lat, lon):
+    """Respaldo si no se pudo descargar el mapa: clasificacion del lugar mas cercano segun Nominatim"""
+    url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
+    respuesta = requests.get(url, headers=HEADERS_OSM, timeout=5).json()
+
+    if 'error' in respuesta:
+        return True
+
+    clase = respuesta.get('class', '')
+    tipo = respuesta.get('type', '')
+
+    if clase == 'natural' and tipo in ['water', 'bay', 'strait', 'coastline', 'beach', 'sea', 'ocean', 'wetland']:
+        return True
+    if clase == 'waterway':
+        return True
+    if clase == 'place' and tipo in ['sea', 'ocean']:
+        return True
+
+    return False
+
+@st.cache_data(show_spinner=False, ttl=86400)
 def es_zona_de_agua(lat, lon):
-    """Verifica si las coordenadas proporcionadas caen en el agua (oceanos, lagos, rios, costas)"""
+    """Verifica si las coordenadas proporcionadas caen en el agua (oceanos, lagos, rios, playas)"""
     try:
-        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
-        headers = {'User-Agent': 'AgroCacaoIA'}
-        respuesta = requests.get(url, headers=headers, timeout=5).json()
-        
-        if 'error' in respuesta: 
-            return True
-            
-        clase = respuesta.get('class', '')
-        tipo = respuesta.get('type', '')
-        
-        # Evaluar clasificaciones comunes de agua y zonas costeras para mayor precision
-        if clase == 'natural' and tipo in ['water', 'bay', 'strait', 'coastline', 'beach', 'sea', 'ocean', 'wetland']:
-            return True
-        if clase == 'waterway':
-            return True
-        if clase == 'place' and tipo in ['sea', 'ocean']:
-            return True
-            
-        return False
-    except:
+        return _es_agua_segun_mapa(lat, lon)
+    except Exception:
+        pass
+    try:
+        return _es_agua_segun_nominatim(lat, lon)
+    except Exception:
         return False
 
-@st.dialog("Alerta de Seleccion")
-def mostrar_alerta_agua():
-    st.error("El modelo no puede predecir en estas condiciones. Ha seleccionado una zona de agua o costera. Por favor, seleccione una zona de tierra firme para continuar.")
+def _crear_dialogo(titulo):
+    # dismissible=False (Streamlit >= 1.46) evita cerrar el aviso con Esc, clic afuera o la X
+    try:
+        return st.dialog(titulo, dismissible=False)
+    except TypeError:
+        return st.dialog(titulo)
+
+@_crear_dialogo("Zona no valida para el analisis")
+def mostrar_alerta_agua(lat, lon):
+    st.markdown(f"""
+    <div class="alerta-agua">
+        <div class="icono">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1E88E5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>
+                <path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>
+                <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>
+            </svg>
+        </div>
+        <div class="titulo">Ha seleccionado una zona de agua</div>
+        <div class="texto">
+            El punto marcado corresponde a un cuerpo de agua o zona costera (mar, rio, lago o playa).
+            El modelo solo puede evaluar terrenos en <b>tierra firme</b>, por lo que no se realizara ninguna prediccion.
+        </div>
+        <div class="coords">{lat:.5f}, {lon:.5f}</div>
+        <ul>
+            <li>Acerque el mapa (zoom) para distinguir mejor la orilla.</li>
+            <li>Haga clic dentro de su finca, alejado del agua.</li>
+        </ul>
+        <div class="espera">
+            <div class="espera-texto">Lea el aviso. Podra cerrarlo en </div>
+            <div class="barra"><div></div></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("Entendido, elegir otro punto", key="btn_cerrar_alerta_agua", use_container_width=True):
+        # Respaldo del lado del servidor por si el boton se activa antes de tiempo (p. ej. con el teclado)
+        if time.time() - st.session_state.get("alerta_agua_abierta_en", 0) >= SEGUNDOS_ALERTA:
+            st.rerun()
 
 # =====================================================================
 # INTERFAZ GRÁFICA
@@ -225,13 +376,21 @@ with bloque_central:
             lat_click = datos_mapa["last_clicked"]["lat"]
             lon_click = datos_mapa["last_clicked"]["lng"]
             
-            # Bloquear ejecucion y mostrar modal solo una vez
-            if es_zona_de_agua(lat_click, lon_click):
-                # Usamos session_state para verificar si ya mostramos la alerta
-                if not st.session_state.get('alerta_agua_mostrada', False):
-                    mostrar_alerta_agua()
-                    st.session_state['alerta_agua_mostrada'] = True
-                # No se asignan las variables latitud ni longitud, por lo que bloquea de todas formas el modelo
+            # st_folium devuelve el mismo last_clicked en cada recarga de la pagina, por eso se
+            # recuerda el ultimo clic procesado: la alerta se muestra una vez por cada clic nuevo en agua
+            click_actual = (lat_click, lon_click)
+            es_click_nuevo = st.session_state.get('ultimo_click_mapa') != click_actual
+            st.session_state['ultimo_click_mapa'] = click_actual
+
+            with st.spinner("Verificando el punto seleccionado..."):
+                punto_en_agua = es_zona_de_agua(lat_click, lon_click)
+
+            if punto_en_agua:
+                if es_click_nuevo:
+                    st.session_state['alerta_agua_abierta_en'] = time.time()
+                    mostrar_alerta_agua(lat_click, lon_click)
+                st.error("El punto seleccionado esta en una zona de agua o costera. Haga clic sobre tierra firme para continuar.")
+                # No se asignan las variables latitud ni longitud, por lo que el modelo queda bloqueado
             else:
                 latitud = lat_click
                 longitud = lon_click
