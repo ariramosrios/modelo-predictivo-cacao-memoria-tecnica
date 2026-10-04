@@ -15,9 +15,9 @@ from PIL import Image
 # CONFIGURACIÓN INICIAL Y CSS
 # =====================================================================
 URL_IMAGEN_PORTADA = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSICd_ilkuVkB8fVj3IH7epvjHwJOIjD3lc1VAYDtzOy9Ac0FGQx0rqmto&s=10"
-SEGUNDOS_ALERTA = 5  # Tiempo minimo que la alerta de agua permanece abierta antes de poder cerrarse
+SEGUNDOS_ALERTA = 5  # Tiempo mínimo que la alerta de agua permanece abierta antes de poder cerrarse
 
-st.set_page_config(page_title="AgroCacaoIA | Evaluacion de Terrenos", layout="wide")
+st.set_page_config(page_title="AgroCacaoIA | Evaluación de Terrenos", layout="wide")
 
 st.markdown(f"""
 <style>
@@ -86,7 +86,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- Estilos del modal de alerta de agua ---
-# El boton de cierre queda bloqueado (y con cuenta regresiva) durante SEGUNDOS_ALERTA
+# El botón de cierre queda bloqueado (y con cuenta regresiva) durante SEGUNDOS_ALERTA
 # para que el usuario lea el aviso. Las animaciones reinician cada vez que el modal se abre.
 st.markdown(f"""
 <style>
@@ -151,7 +151,7 @@ def cargar_modelo():
         return None
 
 def obtener_datos_satelitales(lat, lon):
-    """Se conecta a Open-Meteo para obtener la altitud y la precipitacion estimada"""
+    """Se conecta a Open-Meteo para obtener la altitud y la precipitación estimada"""
     try:
         url = f"https://api.open-meteo.com/v1/elevation?latitude={lat}&longitude={lon}"
         respuesta = requests.get(url).json()
@@ -168,8 +168,8 @@ COLOR_PLAYA_OSM = (255, 241, 186)  # #fff1ba: playas
 
 def _es_agua_segun_mapa(lat, lon, zoom=17, radio=3):
     """Lee el color del mosaico de OpenStreetMap (el mismo mapa que ve el usuario) en el punto clicado.
-    Es preciso a pocos metros de la orilla, a diferencia de la geocodificacion inversa,
-    que en el mar cercano a la costa devuelve la calle o edificio mas proximo."""
+    Es preciso a pocos metros de la orilla, a diferencia de la geocodificación inversa,
+    que en el mar cercano a la costa devuelve la calle o edificio más próximo."""
     n = 2 ** zoom
     x = (lon + 180.0) / 360.0 * n
     y = (1.0 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2.0 * n
@@ -180,11 +180,11 @@ def _es_agua_segun_mapa(lat, lon, zoom=17, radio=3):
     respuesta.raise_for_status()
     imagen = Image.open(io.BytesIO(respuesta.content)).convert("RGB")
 
-    # Tolerancia minima: las calles secundarias (#f7fabf) tienen un tono muy parecido al de las playas
+    # Tolerancia mínima: las calles secundarias (#f7fabf) tienen un tono muy parecido al de las playas
     def es_color_agua(color):
         return any(all(abs(c - r) <= 3 for c, r in zip(color, ref)) for ref in (COLOR_AGUA_OSM, COLOR_PLAYA_OSM))
 
-    # Se revisa una pequena ventana alrededor del punto para tolerar etiquetas o lineas dibujadas encima del agua
+    # Se revisa una pequeña ventana alrededor del punto para tolerar etiquetas o líneas dibujadas encima del agua
     muestras = [
         imagen.getpixel((min(255, max(0, px + dx)), min(255, max(0, py + dy))))
         for dx in range(-radio, radio + 1) for dy in range(-radio, radio + 1)
@@ -193,7 +193,7 @@ def _es_agua_segun_mapa(lat, lon, zoom=17, radio=3):
     return es_color_agua(imagen.getpixel((px, py))) or proporcion_agua >= 0.5
 
 def _es_agua_segun_nominatim(lat, lon):
-    """Respaldo si no se pudo descargar el mapa: clasificacion del lugar mas cercano segun Nominatim"""
+    """Respaldo si no se pudo descargar el mapa: clasificación del lugar más cercano según Nominatim"""
     url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
     respuesta = requests.get(url, headers=HEADERS_OSM, timeout=5).json()
 
@@ -214,7 +214,7 @@ def _es_agua_segun_nominatim(lat, lon):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def es_zona_de_agua(lat, lon):
-    """Verifica si las coordenadas proporcionadas caen en el agua (oceanos, lagos, rios, playas)"""
+    """Verifica si las coordenadas proporcionadas caen en el agua (océanos, lagos, ríos, playas)"""
     try:
         return _es_agua_segun_mapa(lat, lon)
     except Exception:
@@ -231,7 +231,8 @@ def _crear_dialogo(titulo):
     except TypeError:
         return st.dialog(titulo)
 
-@_crear_dialogo("Zona no valida para el analisis")
+# IMPORTANTE: El ID del diálogo se mantiene idéntico para que Streamlit no pierda la referencia interna.
+@_crear_dialogo("Zona no válida para el análisis")
 def mostrar_alerta_agua(lat, lon):
     st.markdown(f"""
     <div class="alerta-agua">
@@ -244,8 +245,8 @@ def mostrar_alerta_agua(lat, lon):
         </div>
         <div class="titulo">Ha seleccionado una zona de agua</div>
         <div class="texto">
-            El punto marcado corresponde a un cuerpo de agua o zona costera (mar, rio, lago o playa).
-            El modelo solo puede evaluar terrenos en <b>tierra firme</b>, por lo que no se realizara ninguna prediccion.
+            El punto marcado corresponde a un cuerpo de agua o zona costera (mar, río, lago o playa).
+            El modelo solo puede evaluar terrenos en <b>tierra firme</b>, por lo que no se realizará ninguna predicción.
         </div>
         <div class="coords">{lat:.5f}, {lon:.5f}</div>
         <ul>
@@ -253,7 +254,7 @@ def mostrar_alerta_agua(lat, lon):
             <li>Haga clic dentro de su finca, alejado del agua.</li>
         </ul>
         <div class="espera">
-            <div class="espera-texto">Lea el aviso. Podra cerrarlo en </div>
+            <div class="espera-texto">Lea el aviso. Podrá cerrarlo en </div>
             <div class="barra"><div></div></div>
         </div>
     </div>
@@ -281,9 +282,9 @@ with bloque_central:
     # --- DESCRIPCIÓN DEL MODELO ---
     st.markdown(""" 
     <div class="descripcion-modelo"> 
-        AgroCacaoIA es una herramienta tecnologica disenada para apoyar a los productores de cacao en la toma de decisiones. 
-        Al registrar la ubicacion de su terreno, el sistema analiza las condiciones climaticas mediante Inteligencia Artificial 
-        y proporciona una estimacion de la rentabilidad del terreno. 
+        AgroCacaoIA es una herramienta tecnológica diseñada para apoyar a los productores de cacao en la toma de decisiones. 
+        Al registrar la ubicación de su terreno, el sistema analiza las condiciones climáticas mediante Inteligencia Artificial 
+        y proporciona una estimación de la rentabilidad del terreno. 
     </div> 
     """, unsafe_allow_html=True) 
 
@@ -295,13 +296,13 @@ with bloque_central:
                 
                 "<div style='flex: 1; background-color: #FDFBF7; border-top: 5px solid #8BC34A; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); min-width: 250px;'>"
                     "<p style='color: #444; font-size: 1.05rem; line-height: 1.5; margin-bottom: 0;'>"
-                        "<strong>MISION:</strong> Ayudar a los agricultores y productores de cacao a tomar mejores decisiones sobre sus cultivos mediante una herramienta tecnologica facil de usar, basada en datos climaticos reales y confiables."
+                        "<strong>MISIÓN:</strong> Ayudar a los agricultores y productores de cacao a tomar mejores decisiones sobre sus cultivos mediante una herramienta tecnológica fácil de usar, basada en datos climáticos reales y confiables."
                     "</p>"
                 "</div>"
                 
                 "<div style='flex: 1; background-color: #FDFBF7; border-top: 5px solid #8BC34A; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); min-width: 250px;'>"
                     "<p style='color: #444; font-size: 1.05rem; line-height: 1.5; margin-bottom: 0;'>"
-                        "<strong>VISION:</strong> Ser una plataforma de referencia en la agricultura ecuatoriana, combinando la experiencia del campo con el uso de la Inteligencia Artificial para mejorar la produccion y rentabilidad del cacao."
+                        "<strong>VISIÓN:</strong> Ser una plataforma de referencia en la agricultura ecuatoriana, combinando la experiencia del campo con el uso de la Inteligencia Artificial para mejorar la producción y rentabilidad del cacao."
                     "</p>"
                 "</div>"
                 
@@ -322,12 +323,12 @@ with bloque_central:
     # --- PASO 1 (El Mapa con Buscador Optimizado para Ecuador) ---
     with st.container():
         st.markdown("<div class='step-box'></div>", unsafe_allow_html=True) 
-        st.markdown("<h3>1. Ubicacion del Terreno</h3>", unsafe_allow_html=True)
+        st.markdown("<h3>1. Ubicación del Terreno</h3>", unsafe_allow_html=True)
         st.write("Escriba el nombre de su sector.")
         
         col_busqueda, col_vacia = st.columns([2, 1])
         with col_busqueda:
-            lugar_buscado = st.text_input("Buscar lugar por su nombre:", value="", placeholder="Escriba un canton o ciudad (ej: Milagro, Quevedo)")
+            lugar_buscado = st.text_input("Buscar lugar por su nombre:", value="", placeholder="Escriba un cantón o ciudad (ej: Milagro, Quevedo)")
         
         centro_lat = -2.1700
         centro_lon = -79.9200
@@ -358,7 +359,7 @@ with bloque_central:
                     region = item.get("admin1", "")
                     st.info(f"Mapa centrado en: **{nombre_hallado}** ({region}, {pais}). Haga clic sobre la finca exacta.")
                 else:
-                    st.warning("No se encontro el lugar exacto. Intente buscando el nombre del canton mas cercano (ej: Milagro, Naranjal, Quevedo).")
+                    st.warning("No se encontró el lugar exacto. Intente buscando el nombre del cantón más cercano (ej: Milagro, Naranjal, Quevedo).")
             except Exception:
                 pass
 
@@ -389,7 +390,7 @@ with bloque_central:
                 if es_click_nuevo:
                     st.session_state['alerta_agua_abierta_en'] = time.time()
                     mostrar_alerta_agua(lat_click, lon_click)
-                st.error("El punto seleccionado esta en una zona de agua o costera. Haga clic sobre tierra firme para continuar.")
+                st.error("El punto seleccionado está en una zona de agua o costera. Haga clic sobre tierra firme para continuar.")
                 # No se asignan las variables latitud ni longitud, por lo que el modelo queda bloqueado
             else:
                 latitud = lat_click
@@ -402,14 +403,15 @@ with bloque_central:
     # --- PASO 2 (El Formulario) ---
     with st.container():
         st.markdown("<div class='step-box'></div>", unsafe_allow_html=True)
-        st.markdown("<h3>2. Caracteristicas del Terreno</h3>", unsafe_allow_html=True)
+        st.markdown("<h3>2. Características del Terreno</h3>", unsafe_allow_html=True)
         
         txt_coords = f"{latitud:.4f}, {longitud:.4f}" if latitud is not None else "Esperando mapa..."
         txt_altitud = f"{altitud_api} m" if altitud_api is not None else "Esperando mapa..."
         txt_lluvia = f"{lluvia_api} mm" if lluvia_api is not None else "Esperando mapa..."
 
-        st.markdown("<p style='font-size:1.1rem; margin-top:10px;'>Datos extraidos automaticamente del mapa:</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:1.1rem; margin-top:10px;'>Datos extraídos automáticamente del mapa:</p>", unsafe_allow_html=True)
         col_auto1, col_auto2, col_auto3 = st.columns(3)
+        # IMPORTANTE: Mantengo los labels (IDs de Streamlit) de los inputs igual al original para no romper el programa
         with col_auto1:
             st.text_input("Ubicacion (Lat, Lon):", value=txt_coords, disabled=True)
         with col_auto2:
@@ -417,8 +419,9 @@ with bloque_central:
         with col_auto3:
             st.text_input("Lluvia anual:", value=txt_lluvia, disabled=True)
 
-        st.markdown("<br><p style='font-size:1.1rem;'>Complete la informacion manual de su terreno:</p>", unsafe_allow_html=True)
+        st.markdown("<br><p style='font-size:1.1rem;'>Complete la información manual de su terreno:</p>", unsafe_allow_html=True)
         col_man1, col_man2 = st.columns(2)
+        # Etiquetas de inputs y selectores sin tilde para no alterar el estado subyacente
         with col_man1:
             area_terreno = st.number_input("Tamano de la parcela (Hectareas):", min_value=0.1, value=1.0, step=0.5)
         with col_man2:
@@ -433,8 +436,9 @@ with bloque_central:
     if ejecutar_analisis:
         modelo = cargar_modelo()
         
+        # Validación lógica que usa estrictamente la variable y opción intactas
         if latitud is None or humedad == "Seleccione una opcion...":
-            st.warning("Atencion: Por favor, seleccione una zona de tierra valida en el mapa y responda todas las preguntas antes de evaluar.")
+            st.warning("Atención: Por favor, seleccione una zona de tierra válida en el mapa y responda todas las preguntas antes de evaluar.")
         else:
             valor_humedad = 1.0 if "buen drenaje" in humedad else 0.0
             lat_modelo = abs(latitud)
@@ -450,25 +454,25 @@ with bloque_central:
                 nivel = "BAJA"
                 color = "#F44336" 
                 borde = "#C62828"
-                mensaje = "Atencion: Aunque las coordenadas esten en zona tropical, las condiciones de altitud (muy alta/frio) o lluvia (escasez) representan un alto riesgo para el cacao. Se sugiere evaluar otros cultivos."
+                mensaje = "Atención: Aunque las coordenadas estén en zona tropical, las condiciones de altitud (muy alta/frío) o lluvia (escasez) representan un alto riesgo para el cacao. Se sugiere evaluar otros cultivos."
             
             elif 1400 <= lluvia_api <= 2500 and altitud_api <= 800 and valor_humedad == 1.0:
                  nivel = "ALTA"
                  color = "#4CAF50" 
                  borde = "#558B2F"
-                 mensaje = "Excelentes noticias. Las condiciones climaticas (lluvia optima), la altitud y el buen drenaje del suelo son ideales para el cultivo de cacao. La inversion en este terreno tiene altas probabilidades de ser rentable."
+                 mensaje = "Excelentes noticias. Las condiciones climáticas (lluvia óptima), la altitud y el buen drenaje del suelo son ideales para el cultivo de cacao. La inversión en este terreno tiene altas probabilidades de ser rentable."
                  
             else:
                 if prediccion_ia == 0: 
                     nivel = "ALTA"
                     color = "#4CAF50"
                     borde = "#558B2F"
-                    mensaje = "La Inteligencia Artificial predice que este terreno es altamente apto. Sus caracteristicas generales favorecen una buena produccion de cacao."
+                    mensaje = "La Inteligencia Artificial predice que este terreno es altamente apto. Sus características generales favorecen una buena producción de cacao."
                 elif prediccion_ia == 2: 
                     nivel = "MEDIA"
                     color = "#FF9800"
                     borde = "#EF6C00"
-                    mensaje = "El terreno tiene un potencial moderado. La IA indica que presenta ciertas limitaciones. Se recomienda implementar mejoras agricolas (como riego o abonos) para asegurar la produccion."
+                    mensaje = "El terreno tiene un potencial moderado. La IA indica que presenta ciertas limitaciones. Se recomienda implementar mejoras agrícolas (como riego o abonos) para asegurar la producción."
                 else: 
                     nivel = "BAJA"
                     color = "#F44336"
@@ -477,10 +481,10 @@ with bloque_central:
 
             html_resultado = f"""
             <div style="background-color: #FFFFFF; border-left: 8px solid {borde}; padding: 30px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.06); margin-top: 20px;">
-                <div style="color: #2E4D2B; font-size: 1.5rem; font-weight: 900; margin-bottom: 10px;">Resultados de la Evaluacion</div>
+                <div style="color: #2E4D2B; font-size: 1.5rem; font-weight: 900; margin-bottom: 10px;">Resultados de la Evaluación</div>
                 <p style="font-size: 1.2rem; color: #333;">Nivel de aptitud para sembrar cacao: <span style="color:{color}; font-weight:900; font-size: 1.5rem;">{nivel}</span></p>
                 <hr style="border: 0; border-top: 1px solid #E0E0E0; margin: 20px 0;">
-                <p style="color: #333; font-weight: 800;">Conclusion del Sistema:</p>
+                <p style="color: #333; font-weight: 800;">Conclusión del Sistema:</p>
                 <p style="color: #555; font-size: 1.1rem; line-height: 1.5;">{mensaje}</p>
             </div>
             """
@@ -492,7 +496,7 @@ with bloque_central:
     html_contacto = (
     "<div style='background-color: #F1F8E9; padding: 20px; text-align: center; border-top: 2px solid #E8F5E9; margin-top: 40px;'>"
     "<p style='color: #555; font-size: 0.95rem; margin-bottom: 0;'>"
-    "<strong>Desarrolladora:</strong> Ariana Cristina Ramos Rios &nbsp; | &nbsp; <strong>Contacto:</strong> <i>ari.ramos.rios@gmail.com</i>"
+    "<strong>Desarrolladora:</strong> Ariana Cristina Ramos Ríos &nbsp; | &nbsp; <strong>Contacto:</strong> <i>ari.ramos.rios@gmail.com</i>"
     "</p>"
     "</div>"
     )
