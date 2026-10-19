@@ -496,7 +496,7 @@ with bloque_central:
     html_contacto = (
     "<div style='background-color: #F1F8E9; padding: 20px; text-align: center; border-top: 2px solid #E8F5E9; margin-top: 40px;'>"
     "<p style='color: #555; font-size: 0.95rem; margin-bottom: 0;'>"
-    "<strong>Desarrolladora:</strong> Ariana Cristina Ramos Ríos &nbsp; | &nbsp; <strong>Contacto:</strong> <i>ari.ramos.rios@gmail.com</i>"
+    "<strong>Desarrolladora:</strong> Ariana Cristina Ramos Rios &nbsp; | &nbsp; <strong>Contacto:</strong> <i>ari.ramos.rios@gmail.com</i>"
     "</p>"
     "</div>"
     )
