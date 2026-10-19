@@ -151,41 +151,58 @@ def cargar_modelo():
         return None
 
 def obtener_datos_satelitales(lat, lon):
-    """Se conecta a la API de Open-Meteo para obtener la altitud y calcular la precipitación."""
+    """
+    Obtiene la altitud real desde Open-Meteo y calcula la precipitación.
+    """
+    # Si las coordenadas aún no existen o están vacías al cargar la página
+    if lat is None or lon is None:
+        return 0.0, 1500.0
+
     try:
-        # 1. Asegurar que las variables sean tipo float
         lat_f = float(lat)
         lon_f = float(lon)
-        
-        # 2. Formatear forzosamente a string con punto decimal (evita problemas en la nube)
-        lat_str = f"{lat_f:.4f}"
-        lon_str = f"{lon_f:.4f}"
-        
-        # URL oficial de la API de elevación
-        url = f"https://api.open-meteo.com/v1/elevation?latitude={lat_str}&longitude={lon_str}"
         
         headers = {
             'User-Agent': 'AgroCacaoIA/1.0 (https://streamlit.app)'
         }
         
-        res = requests.get(url, headers=headers, timeout=5)
+        # MÉTOD0 1: Servidor principal de Open-Meteo (devuelve la altitud como un número directo)
+        params_forecast = {
+            "latitude": lat_f,
+            "longitude": lon_f,
+            "current": "temperature_2m"
+        }
+        url_forecast = "https://api.open-meteo.com/v1/forecast"
+        res = requests.get(url_forecast, params=params_forecast, headers=headers, timeout=5)
         
         if res.status_code == 200:
             datos = res.json()
-            if "elevation" in datos and isinstance(datos["elevation"], list) and len(datos["elevation"]) > 0:
-                altitud = float(datos["elevation"][0])
-            elif "elevation" in datos and isinstance(datos["elevation"], (int, float)):
+            if "elevation" in datos and datos["elevation"] is not None:
                 altitud = float(datos["elevation"])
-            else:
-                altitud = 25.0
-        else:
-            altitud = 25.0
-            
-        precipitacion = 1500.0 + (abs(lat_f) * 10.0) + (altitud * 0.1)
-        return round(altitud, 1), round(precipitacion, 1)
+                precipitacion = 1500.0 + (abs(lat_f) * 10.0) + (altitud * 0.1)
+                return round(altitud, 1), round(precipitacion, 1)
+
+        # MÉTOD0 2 (Respaldo): Servidor secundario exclusivo de elevación
+        params_elevation = {
+            "latitude": lat_f,
+            "longitude": lon_f
+        }
+        url_elevation = "https://api.open-meteo.com/v1/elevation"
+        res_elev = requests.get(url_elevation, params=params_elevation, headers=headers, timeout=5)
         
+        if res_elev.status_code == 200:
+            datos_elev = res_elev.json()
+            if "elevation" in datos_elev and isinstance(datos_elev["elevation"], list) and len(datos_elev["elevation"]) > 0:
+                altitud = float(datos_elev["elevation"][0])
+                precipitacion = 1500.0 + (abs(lat_f) * 10.0) + (altitud * 0.1)
+                return round(altitud, 1), round(precipitacion, 1)
+
     except Exception as e:
-        return 25.0, 1600.0
+        # Muestra el error en la consola si algo llega a fallar
+        print(f"Error al obtener datos satelitales: {e}")
+
+    # Si ambos métodos fallan, devuelve un valor neutro
+    return 0.0, 1500.0
 
 HEADERS_OSM = {'User-Agent': 'AgroCacaoIA/1.0 (evaluacion de terrenos de cacao)'}
 COLOR_AGUA_OSM = (170, 211, 223)   # #aad3df: mar, rios y lagos en el mapa base de OpenStreetMap
