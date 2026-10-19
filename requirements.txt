@@ -6,3 +6,4 @@ numpy
 xgboost
 pandas
 Pillow
+scikit-learn
