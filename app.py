@@ -153,14 +153,31 @@ def cargar_modelo():
 def obtener_datos_satelitales(lat, lon):
     """Se conecta a Open-Meteo para obtener la altitud y la precipitación estimada"""
     try:
-        url = f"https://api.open-meteo.com/v1/elevation?latitude={lat}&longitude={lon}"
-        respuesta = requests.get(url).json()
+        lat_f = float(lat)
+        lon_f = float(lon)
         
-        altitud = respuesta.get("elevation", [0.0])[0] if "elevation" in respuesta else 0.0
-        precipitacion = 1500 + (abs(lat) * 10) + (altitud * 0.1) 
+        url = f"https://api.open-meteo.com/v1/elevation?latitude={lat_f}&longitude={lon_f}"
+        
+        # Encabezado User-Agent indispensable para evitar el bloqueo en Streamlit Cloud
+        headers = {
+            'User-Agent': 'AgroCacaoIA/1.0 (Mozilla/5.0)'
+        }
+        
+        respuesta_raw = requests.get(url, headers=headers, timeout=5)
+        
+        if respuesta_raw.status_code == 200:
+            respuesta = respuesta_raw.json()
+            if "elevation" in respuesta and isinstance(respuesta["elevation"], list) and len(respuesta["elevation"]) > 0:
+                altitud = respuesta["elevation"][0]
+            else:
+                altitud = 25.0
+        else:
+            altitud = 25.0
+            
+        precipitacion = 1500 + (abs(lat_f) * 10) + (altitud * 0.1) 
         return round(float(altitud), 1), round(float(abs(precipitacion)), 1)
-    except:
-        return 500.0, 1600.0 
+    except Exception as e:
+        return 500.0, 1600.0
 
 HEADERS_OSM = {'User-Agent': 'AgroCacaoIA/1.0 (evaluacion de terrenos de cacao)'}
 COLOR_AGUA_OSM = (170, 211, 223)   # #aad3df: mar, rios y lagos en el mapa base de OpenStreetMap
