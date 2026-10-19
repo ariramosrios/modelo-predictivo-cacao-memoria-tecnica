@@ -153,11 +153,16 @@ def cargar_modelo():
 def obtener_datos_satelitales(lat, lon):
     """Se conecta a la API de Open-Meteo para obtener la altitud y calcular la precipitación."""
     try:
+        # 1. Asegurar que las variables sean tipo float
         lat_f = float(lat)
         lon_f = float(lon)
         
-        # URL oficial de la API de elevación de Open-Meteo
-        url = f"https://api.open-meteo.com/v1/elevation?latitude={lat_f}&longitude={lon_f}"
+        # 2. Formatear forzosamente a string con punto decimal (evita problemas en la nube)
+        lat_str = f"{lat_f:.4f}"
+        lon_str = f"{lon_f:.4f}"
+        
+        # URL oficial de la API de elevación
+        url = f"https://api.open-meteo.com/v1/elevation?latitude={lat_str}&longitude={lon_str}"
         
         headers = {
             'User-Agent': 'AgroCacaoIA/1.0 (https://streamlit.app)'
@@ -167,21 +172,20 @@ def obtener_datos_satelitales(lat, lon):
         
         if res.status_code == 200:
             datos = res.json()
-            # Open-Meteo devuelve {"elevation": [1035.0]} o similar
             if "elevation" in datos and isinstance(datos["elevation"], list) and len(datos["elevation"]) > 0:
                 altitud = float(datos["elevation"][0])
             elif "elevation" in datos and isinstance(datos["elevation"], (int, float)):
                 altitud = float(datos["elevation"])
             else:
-                altitud = 200.0  # Valor promedio zonal si no hay dato
+                altitud = 25.0
         else:
-            altitud = 200.0
+            altitud = 25.0
             
         precipitacion = 1500.0 + (abs(lat_f) * 10.0) + (altitud * 0.1)
         return round(altitud, 1), round(precipitacion, 1)
         
     except Exception as e:
-        return 200.0, 1600.0
+        return 25.0, 1600.0
 
 HEADERS_OSM = {'User-Agent': 'AgroCacaoIA/1.0 (evaluacion de terrenos de cacao)'}
 COLOR_AGUA_OSM = (170, 211, 223)   # #aad3df: mar, rios y lagos en el mapa base de OpenStreetMap
